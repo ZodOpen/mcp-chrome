@@ -1,5 +1,9 @@
 # Chrome MCP Server 🚀
 
+> ⚠️ **本项目基于原项目开发**：[https://github.com/hangwin/mcp-chrome.git](https://github.com/hangwin/mcp-chrome.git)
+>
+> 本项目在原项目基础上新增了远程 HTTP 连接和 WebSocket 连接功能，支持本地和远程双模式运行。
+
 [![许可证: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue.svg)](https://www.typescriptlang.org/)
 [![Chrome 扩展](https://img.shields.io/badge/Chrome-Extension-green.svg)](https://developer.chrome.com/docs/extensions/)
@@ -232,7 +236,7 @@ chmod +x prepare-deploy.sh
 
 #### 方式一：本地连接（本地运行 MCP 服务器）
 
-##### 1.1 使用 Streamable HTTP 连接（👍🏻 推荐）
+##### 1.1 使用 Streamable HTTP 连接
 
 将以下配置添加到客户端的 MCP 配置中（以 CherryStudio 为例）：
 
@@ -428,5 +432,3 @@ pm2 startup
 - [工具列表](docs/TOOLS_zh.md) - 完整的工具 API 文档
 - [故障排除](docs/TROUBLESHOOTING_zh.md) - 常见问题解决方案
 - [构建和部署](docs/BUILD_AND_DEPLOY.md) - 详细的构建和部署流程
-
-![IMG_6296](https://github.com/user-attachments/assets/ecd2e084-24d2-4038-b75f-3ab020b55594)

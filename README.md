@@ -1,10 +1,12 @@
 # Chrome MCP Server 🚀
 
-[![Stars](https://img.shields.io/github/stars/hangwin/mcp-chrome)](https://img.shields.io/github/stars/hangwin/mcp-chrome)
+> ⚠️ **This project is based on the original project**: [https://github.com/hangwin/mcp-chrome.git](https://github.com/hangwin/mcp-chrome.git)
+>
+> This project adds remote HTTP connection and WebSocket connection capabilities on top of the original project, supporting both local and remote operation modes.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue.svg)](https://www.typescriptlang.org/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green.svg)](https://developer.chrome.com/docs/extensions/)
-[![Release](https://img.shields.io/github/v/release/hangwin/mcp-chrome.svg)](https://img.shields.io/github/v/release/hangwin/mcp-chrome.svg)
 
 > 🌟 **Turn your Chrome browser into your intelligent assistant** - Let AI take control of your browser, transforming it into a powerful AI-controlled automation tool.
 
@@ -17,10 +19,6 @@
 ## 🎯 What is Chrome MCP Server?
 
 Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) server** that exposes your Chrome browser functionality to AI assistants like Claude, enabling complex browser automation, content analysis, and semantic search. Unlike traditional browser automation tools (like Playwright), **Chrome MCP Server** directly uses your daily Chrome browser, leveraging existing user habits, configurations, and login states, allowing various large models or chatbots to take control of your browser and truly become your everyday assistant.
-
-## ✨ New Features(2025/12/30)
-
-- **A New Visual Editor for Claude Code & Codex**, for more detail here: [VisualEditor](docs/VisualEditor.md)
 
 ## ✨ Core Features
 
@@ -258,11 +256,11 @@ For detailed deployment instructions, see: [Build and Deploy Documentation](docs
 
 ### Usage with MCP Protocol Clients
 
-#### Using Streamable HTTP Connection (👍🏻 Recommended)
+#### Method 1: Local Connection (Local MCP Server)
+
+##### 1.1 Using Streamable HTTP Connection (👍🏻 Recommended)
 
 Add the following configuration to your MCP client configuration (using CherryStudio as an example):
-
-> Streamable HTTP connection method is recommended
 
 ```json
 {
@@ -275,9 +273,9 @@ Add the following configuration to your MCP client configuration (using CherrySt
 }
 ```
 
-#### Using STDIO Connection (Alternative)
+##### 1.2 Using STDIO Connection (Alternative)
 
-If your client only supports stdio connection method, please use the following approach:
+If your client only supports STDIO connection method, please use the following approach:
 
 1. First, check the installation location of the npm package you just installed
 
@@ -288,8 +286,8 @@ npm list -g mcp-chrome-bridge
 pnpm list -g mcp-chrome-bridge
 ```
 
-Assuming the command above outputs the path: /Users/xxx/Library/pnpm/global/5
-Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js
+Assuming the command above outputs the path: `/Users/xxx/Library/pnpm/global/5`
+Then your final path would be: `/Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js`
 
 2. Replace the configuration below with the final path you just obtained
 
@@ -307,9 +305,88 @@ Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/mcp
 }
 ```
 
-eg：config in augment:
+#### Method 2: Remote Connection (Remote Server + Browser Extension)
 
-<img width="494" alt="截屏2025-06-22 22 11 25" src="https://github.com/user-attachments/assets/48eefc0c-a257-4d3b-8bbe-d7ff716de2bf" />
+##### 2.1 Deploy Remote MCP Server
+
+1. **Build Server Deployment Package**
+
+```bash
+# In project root directory
+cd app/native-server
+
+# Build shared package (if not already built)
+cd ../../packages/shared
+pnpm build
+
+# Build native-server
+cd ../../app/native-server
+pnpm build
+
+# Prepare deployment package
+chmod +x prepare-deploy.sh
+./prepare-deploy.sh
+```
+
+Deployment package location: `app/native-server/native-server-deploy.tar.gz`
+
+2. **Upload and Deploy to Remote Server**
+
+```bash
+# Upload to server
+scp app/native-server/native-server-deploy.tar.gz root@your-server:/root/
+
+# SSH to server
+ssh root@your-server
+
+# Extract and install
+cd /root
+mkdir -p mcp-server
+tar -xzf native-server-deploy.tar.gz -C mcp-server/
+cd mcp-server
+npm install --production
+
+# Start server (using PM2)
+pm2 start start-server-only.js --name mcp-chrome -- 12306
+pm2 save
+pm2 startup
+```
+
+3. **Configure Client to Connect to Remote Server**
+
+Add the following to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp-server-remote": {
+      "type": "streamableHttp",
+      "url": "http://your-server-ip:12306/mcp"
+    }
+  }
+}
+```
+
+##### 2.2 Configure Browser Extension to Connect to Remote Server
+
+1. **Load Chrome Extension** (refer to "Load Chrome Extension" section below)
+
+2. **Configure Remote Connection in Extension**
+   - Open extension popup
+   - Select "Remote WebSocket" connection mode
+   - Enter remote server address: `ws://your-server-ip:12306/browser-ws`
+   - Click "Connect"
+
+   Or use HTTP connection mode:
+   - Select "HTTP Connection" mode
+   - Enter remote server address: `http://your-server-ip:12306`
+   - Click "Connect"
+
+3. **Verify Connection**
+
+   After successful connection, the extension status should show "✅ Connected", and the remote server can now control your browser.
+
+> 💡 **Tip**: In remote connection mode, the browser extension connects to the remote server via WebSocket or HTTP. The server receives MCP requests from AI clients and forwards them to connected browser extensions for execution.
 
 ## 🛠️ Available Tools
 
@@ -367,102 +444,6 @@ Complete tool list: [Complete Tool List](docs/TOOLS.md)
 - `chrome_bookmark_delete` - Delete bookmarks
 </details>
 
-## 🧪 Usage Examples
-
-### AI helps you summarize webpage content and automatically control Excalidraw for drawing
-
-prompt: [excalidraw-prompt](prompt/excalidraw-prompt.md)
-Instruction: Help me summarize the current page content, then draw a diagram to aid my understanding.
-https://www.youtube.com/watch?v=3fBPdUBWVz0
-
-https://github.com/user-attachments/assets/fd17209b-303d-48db-9e5e-3717141df183
-
-### After analyzing the content of the image, the LLM automatically controls Excalidraw to replicate the image
-
-prompt: [excalidraw-prompt](prompt/excalidraw-prompt.md)|[content-analize](prompt/content-analize.md)
-Instruction: First, analyze the content of the image, and then replicate the image by combining the analysis with the content of the image.
-https://www.youtube.com/watch?v=tEPdHZBzbZk
-
-https://github.com/user-attachments/assets/60d12b1a-9b74-40f4-994c-95e8fa1fc8d3
-
-### AI automatically injects scripts and modifies webpage styles
-
-prompt: [modify-web-prompt](prompt/modify-web.md)
-Instruction: Help me modify the current page's style and remove advertisements.
-https://youtu.be/twI6apRKHsk
-
-https://github.com/user-attachments/assets/69cb561c-2e1e-4665-9411-4a3185f9643e
-
-### AI automatically captures network requests for you
-
-query: I want to know what the search API for Xiaohongshu is and what the response structure looks like
-
-https://youtu.be/1hHKr7XKqnQ
-
-https://github.com/user-attachments/assets/dc7e5cab-b9af-4b9a-97ce-18e4837318d9
-
-### AI helps analyze your browsing history
-
-query: Analyze my browsing history from the past month
-
-https://youtu.be/jf2UZfrR2Vk
-
-https://github.com/user-attachments/assets/31b2e064-88c6-4adb-96d7-50748b826eae
-
-### Web page conversation
-
-query: Translate and summarize the current web page
-https://youtu.be/FlJKS9UQyC8
-
-https://github.com/user-attachments/assets/aa8ef2a1-2310-47e6-897a-769d85489396
-
-### AI automatically takes screenshots for you (web page screenshots)
-
-query: Take a screenshot of Hugging Face's homepage
-https://youtu.be/7ycK6iksWi4
-
-https://github.com/user-attachments/assets/65c6eee2-6366-493d-a3bd-2b27529ff5b3
-
-### AI automatically takes screenshots for you (element screenshots)
-
-query: Capture the icon from Hugging Face's homepage
-https://youtu.be/ev8VivANIrk
-
-https://github.com/user-attachments/assets/d0cf9785-c2fe-4729-a3c5-7f2b8b96fe0c
-
-### AI helps manage bookmarks
-
-query: Add the current page to bookmarks and put it in an appropriate folder
-
-https://youtu.be/R_83arKmFTo
-
-https://github.com/user-attachments/assets/15a7d04c-0196-4b40-84c2-bafb5c26dfe0
-
-### Automatically close web pages
-
-query: Close all shadcn-related web pages
-
-https://youtu.be/2wzUT6eNVg4
-
-https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
-
-## 🚧 Future Roadmap
-
-We have exciting plans for the future development of Chrome MCP Server:
-
-- [ ] Authentication
-- [ ] Recording and Playback
-- [ ] Workflow Automation
-- [ ] Enhanced Browser Support (Firefox Extension)
-
----
-
-**Want to contribute to any of these features?** Check out our [Contributing Guide](docs/CONTRIBUTING.md) and join our development community!
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -474,83 +455,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issue solutions
 - [Build and Deploy](docs/BUILD_AND_DEPLOY.md) - Detailed build and deployment process
 - [Remote Control Architecture](docs/REMOTE_CONTROL_ARCHITECTURE.md) - Remote connection architecture design
-
-## 🧹 Files to Clean Before Uploading to GitHub
-
-Before uploading the project to GitHub, make sure to clean the following files:
-
-### Build Artifacts and Temporary Files
-
-```bash
-# Build artifacts
-app/chrome-extension/.output/
-app/chrome-extension/.wxt/
-app/native-server/dist/
-app/native-server/deploy-package/
-packages/shared/dist/
-packages/wasm-simd/pkg/
-
-# Deployment packages (already in .gitignore, but verify)
-app/native-server.tar.gz
-app/native-server/native-server-deploy.tar.gz
-
-# Node modules (usually already in .gitignore)
-node_modules/
-**/node_modules/
-```
-
-### Log and Cache Files
-
-```bash
-# Log files
-*.log
-logs/
-pnpm-debug.log*
-npm-debug.log*
-
-# Editor files
-.DS_Store
-.vscode/*
-!.vscode/extensions.json
-.idea/
-*.suo
-*.sw?
-
-# Environment variable files
-.env
-.env.local
-.env.*.local
-```
-
-### Other Temporary Files
-
-```bash
-# Statistics files
-stats.html
-stats-*.json
-
-# Other temporary directories
-other/
-tools_optimize.md
-Agents.md
-CLAUDE.md
-```
-
-### Cleanup Commands
-
-You can use the following commands to quickly clean up:
-
-```bash
-# Clean build artifacts
-pnpm clean:dist
-
-# Clean everything (including node_modules, use with caution)
-pnpm clean
-
-# Manually clean deployment packages
-rm -f app/native-server.tar.gz
-rm -f app/native-server/native-server-deploy.tar.gz
-rm -rf app/native-server/deploy-package
-```
-
-> 💡 **Tip**: Most files are already configured in `.gitignore`, and Git will automatically ignore them. However, it's recommended to verify that no temporary files are missed before uploading.
