@@ -1,6 +1,6 @@
 #!/bin/bash
 # 准备远程部署包
-# 自动处理 workspace 依赖
+# 包含完整的 node_modules，可直接运行
 
 set -e
 
@@ -22,12 +22,11 @@ echo "📝 处理 package.json..."
 node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-// 移除 chrome-mcp-shared 依赖，因为它已经包含在 node_modules 中了
-// npm install 时使用 --no-save 或 --legacy-peer-deps 可以避免删除已有的 node_modules
-delete pkg.dependencies['chrome-mcp-shared'];
+// 将 chrome-mcp-shared 改为本地相对路径
+pkg.dependencies['chrome-mcp-shared'] = 'file:./node_modules_local/chrome-mcp-shared';
 // 写入新文件
 fs.writeFileSync('$DEPLOY_DIR/package.json', JSON.stringify(pkg, null, 2), 'utf8');
-console.log('✅ package.json 已处理（移除了 chrome-mcp-shared，因为已包含在 node_modules 中）');
+console.log('✅ package.json 已处理（chrome-mcp-shared 设置为本地路径）');
 "
 
 # 检查 shared 包
@@ -36,12 +35,12 @@ SHARED_DIR="../../packages/shared"
 if [ -d "$SHARED_DIR/dist" ]; then
   echo "✅ 找到 shared 包构建产物"
   
-  # 复制 shared 包到 node_modules（保持 dist 目录结构）
-  mkdir -p "$DEPLOY_DIR/node_modules/chrome-mcp-shared"
-  cp -r "$SHARED_DIR/dist" "$DEPLOY_DIR/node_modules/chrome-mcp-shared/"
-  cp "$SHARED_DIR/package.json" "$DEPLOY_DIR/node_modules/chrome-mcp-shared/"
+  # 复制 shared 包到 node_modules_local（单独的目录，避免被 npm 操作）
+  mkdir -p "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared"
+  cp -r "$SHARED_DIR/dist" "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared/"
+  cp "$SHARED_DIR/package.json" "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared/"
   
-  echo "✅ chrome-mcp-shared 已复制到 node_modules（包含 dist/ 目录）"
+  echo "✅ chrome-mcp-shared 已复制到 node_modules_local"
 else
   echo "⚠️  警告: 未找到 shared 包构建产物"
   echo "   正在构建 shared 包..."
@@ -50,15 +49,22 @@ else
   (cd "$SHARED_DIR" && npm run build)
   
   if [ -d "$SHARED_DIR/dist" ]; then
-    mkdir -p "$DEPLOY_DIR/node_modules/chrome-mcp-shared"
-    cp -r "$SHARED_DIR/dist" "$DEPLOY_DIR/node_modules/chrome-mcp-shared/"
-    cp "$SHARED_DIR/package.json" "$DEPLOY_DIR/node_modules/chrome-mcp-shared/"
-    echo "✅ shared 包已构建并复制（包含 dist/ 目录）"
+    mkdir -p "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared"
+    cp -r "$SHARED_DIR/dist" "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared/"
+    cp "$SHARED_DIR/package.json" "$DEPLOY_DIR/node_modules_local/chrome-mcp-shared/"
+    echo "✅ shared 包已构建并复制"
   else
     echo "❌ 无法构建 shared 包"
     exit 1
   fi
 fi
+
+# 安装生产依赖到部署包
+echo "📦 安装生产依赖..."
+cd "$DEPLOY_DIR"
+npm install --production --legacy-peer-deps
+echo "✅ 依赖安装完成"
+cd ..
 
 # 打包
 echo "📦 创建部署压缩包..."
@@ -76,16 +82,13 @@ echo "🚀 部署步骤："
 echo "  1. 上传到服务器:"
 echo "     scp native-server-deploy.tar.gz user@your-server:/opt/"
 echo ""
-echo "  2. 在服务器上解压并安装:"
+echo "  2. 在服务器上解压并运行:"
 echo "     ssh user@your-server"
 echo "     cd /opt"
 echo "     mkdir -p mcp-server"
 echo "     tar -xzf native-server-deploy.tar.gz -C mcp-server/"
 echo "     cd mcp-server"
-echo "     # 方式1：如果 node_modules 已存在，可以直接运行（推荐）"
-echo "     # node_modules 已包含所有依赖，包括 chrome-mcp-shared"
-echo "     # 方式2：如果需要重新安装依赖，使用以下命令："
-echo "     npm install --production --legacy-peer-deps"
+echo "     # 所有依赖已包含在部署包中，可以直接运行"
 echo ""
 echo "  3. 启动服务:"
 echo "     node start-server-only.js 12306"

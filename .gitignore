@@ -47,3 +47,8 @@ CLAUDE.md
 
 .docs/
 .claude/
+
+# 部署临时文件
+app/native-server/deploy-package/
+releases/native-server-deploy/
+releases/chrome-mcp-server-latest/
