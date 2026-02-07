@@ -22,15 +22,12 @@ echo "📝 处理 package.json..."
 node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-// 将 chrome-mcp-shared 设置为本地文件依赖，而不是移除
-// 这样 npm install 不会删除已包含的 node_modules/chrome-mcp-shared
-if (!pkg.dependencies) {
-  pkg.dependencies = {};
-}
-pkg.dependencies['chrome-mcp-shared'] = 'file:./node_modules/chrome-mcp-shared';
+// 移除 chrome-mcp-shared 依赖，因为它已经包含在 node_modules 中了
+// npm install 时使用 --no-save 或 --legacy-peer-deps 可以避免删除已有的 node_modules
+delete pkg.dependencies['chrome-mcp-shared'];
 // 写入新文件
 fs.writeFileSync('$DEPLOY_DIR/package.json', JSON.stringify(pkg, null, 2), 'utf8');
-console.log('✅ package.json 已处理（chrome-mcp-shared 设置为本地文件依赖）');
+console.log('✅ package.json 已处理（移除了 chrome-mcp-shared，因为已包含在 node_modules 中）');
 "
 
 # 检查 shared 包
@@ -85,7 +82,10 @@ echo "     cd /opt"
 echo "     mkdir -p mcp-server"
 echo "     tar -xzf native-server-deploy.tar.gz -C mcp-server/"
 echo "     cd mcp-server"
-echo "     npm install --production"
+echo "     # 方式1：如果 node_modules 已存在，可以直接运行（推荐）"
+echo "     # node_modules 已包含所有依赖，包括 chrome-mcp-shared"
+echo "     # 方式2：如果需要重新安装依赖，使用以下命令："
+echo "     npm install --production --legacy-peer-deps"
 echo ""
 echo "  3. 启动服务:"
 echo "     node start-server-only.js 12306"

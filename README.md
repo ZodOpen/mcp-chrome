@@ -85,11 +85,12 @@ Download the following files:
    tar -xzf native-server-deploy.tar.gz
    cd native-server-deploy  # or the extracted folder name
 
-   # Install dependencies (first time only)
-   npm install --production
-
-   # Start server (default port 12306)
+   # Method 1: Run directly (recommended)
+   # node_modules already contains all dependencies, you can start directly
    node start-server-only.js 12306
+
+   # Method 2: If you need to reinstall dependencies (usually not needed)
+   # npm install --production --legacy-peer-deps
    ```
 
    After successful startup, you'll see output similar to:
