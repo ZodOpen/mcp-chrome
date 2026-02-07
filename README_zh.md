@@ -81,9 +81,12 @@ Chrome MCP Server 是一个基于chrome插件的 **模型上下文协议 (MCP) �
    ```bash
    # 解压服务器部署包
    tar -xzf native-server-deploy.tar.gz
-   cd native-server-deploy  # 或解压后的文件夹名称
+   cd native-server-deploy
 
-   # 直接运行（所有依赖已包含在部署包中）
+   # 安装依赖
+   npm install --production
+
+   # 启动服务
    node start-server-only.js 12306
    ```
 

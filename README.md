@@ -83,9 +83,12 @@ Download the following files:
    ```bash
    # Extract server deployment package
    tar -xzf native-server-deploy.tar.gz
-   cd native-server-deploy  # or the extracted folder name
+   cd native-server-deploy
 
-   # Run directly (all dependencies included in the deployment package)
+   # Install dependencies
+   npm install --production
+
+   # Start server
    node start-server-only.js 12306
    ```
 
