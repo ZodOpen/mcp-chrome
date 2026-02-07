@@ -22,11 +22,15 @@ echo "📝 处理 package.json..."
 node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-// 移除 workspace 依赖
-delete pkg.dependencies['chrome-mcp-shared'];
+// 将 chrome-mcp-shared 设置为本地文件依赖，而不是移除
+// 这样 npm install 不会删除已包含的 node_modules/chrome-mcp-shared
+if (!pkg.dependencies) {
+  pkg.dependencies = {};
+}
+pkg.dependencies['chrome-mcp-shared'] = 'file:./node_modules/chrome-mcp-shared';
 // 写入新文件
 fs.writeFileSync('$DEPLOY_DIR/package.json', JSON.stringify(pkg, null, 2), 'utf8');
-console.log('✅ package.json 已处理（移除了 chrome-mcp-shared）');
+console.log('✅ package.json 已处理（chrome-mcp-shared 设置为本地文件依赖）');
 "
 
 # 检查 shared 包
