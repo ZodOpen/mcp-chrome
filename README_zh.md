@@ -8,24 +8,25 @@
 
 **📖 文档**: [English](README.md) | [中文](README_zh.md)
 
-> 项目仍处于早期阶段，正在紧锣密鼓开发中，后续将有更多新功能，以及稳定性等的提升，如遇bug，请轻喷
-
 ---
 
 ## 🎯 什么是 Chrome MCP Server？
 
 Chrome MCP Server 是一个基于chrome插件的 **模型上下文协议 (MCP) 服务器**，它将您的 Chrome 浏览器功能暴露给 Claude 等 AI 助手，实现复杂的浏览器自动化、内容分析和语义搜索等。与传统的浏览器自动化工具（如playwright）不同，**Chrome MCP server**直接使用您日常使用的chrome浏览器，基于现有的用户习惯和配置、登录态，让各种大模型或者各种chatbot都可以接管你的浏览器，真正成为你的日常助手
 
-## ✨ 船新的功能(2025/12/30)
-
-- **让Claude Code/Codex也能使用的可视化编辑器**, 更多详情请看: [VisualEditor](docs/VisualEditor_zh.md)
-
 ## ✨ 核心特性
 
 - 😁 **chatbot/模型无关**：让任意你喜欢的llm或chatbot客户端或agent来自动化操作你的浏览器
 - ⭐️ **使用你原本的浏览器**：无缝集成用户本身的浏览器环境（你的配置、登录态等）
-- 💻 **完全本地运行**：纯本地运行的mcp server，保证用户隐私
-- 🚄 **Streamable http**：Streamable http的连接方式
+- 💻 **本地和远程双模式**：支持完全本地运行（保证隐私）和远程服务器部署（灵活扩展）
+- 🚄 **多种连接方式**：
+  - **Streamable HTTP**：本地和远程都支持的 HTTP 连接方式（推荐）
+  - **WebSocket 远程连接**：浏览器插件通过 WebSocket 连接到远程服务器，实现远程控制
+  - **STDIO**：传统的标准输入输出连接方式
+- 🌐 **远程控制能力**：
+  - **HTTP 远程连接**：插件可直接通过 HTTP 连接到远程 MCP 服务器
+  - **WebSocket 双向通信**：支持浏览器插件与远程服务器的实时双向通信
+  - **多客户端管理**：远程服务器可同时管理多个浏览器客户端连接
 - 🏎 **跨标签页** 跨标签页的上下文
 - 🧠 **语义搜索**：内置向量数据库和本地小模型，智能发现浏览器标签页内容
 - 🔍 **智能内容分析**：AI 驱动的文本提取和相似度匹配
@@ -50,48 +51,190 @@ Chrome MCP Server 是一个基于chrome插件的 **模型上下文协议 (MCP) �
 - Node.js >= 20.0.0 和 （npm 或 pnpm）
 - Chrome/Chromium 浏览器
 
-### 安装步骤
+### 方式一：使用预构建版本
 
-1. **从github上下载最新的chrome扩展**
+#### 快速安装步骤
 
-下载地址：https://github.com/hangwin/mcp-chrome/releases
+1. **从 GitHub Releases 下载预构建包**
 
-2. **全局安装mcp-chrome-bridge**
+访问：https://github.com/ZodOpen/mcp-chrome/releases
 
-npm
+下载以下文件：
 
-```bash
-npm install -g mcp-chrome-bridge
-```
+- **Chrome 插件包**：`chrome-mcp-server-latest.zip`（或最新版本的插件压缩包）
+- **Native Server 部署包**：`native-server-deploy.tar.gz`（或最新版本的服务器部署包）
 
-pnpm
-
-```bash
-# 方法1：全局启用脚本（推荐）
-pnpm config set enable-pre-post-scripts true
-pnpm install -g mcp-chrome-bridge
-
-# 方法2：如果 postinstall 没有运行，手动注册
-pnpm install -g mcp-chrome-bridge
-mcp-chrome-bridge register
-```
-
-> 注意：pnpm v7+ 默认禁用 postinstall 脚本以提高安全性。`enable-pre-post-scripts` 设置控制是否运行 pre/post 安装脚本。如果自动注册失败，请使用上述手动注册命令。
-
-3. **加载 Chrome 扩展**
+2. **安装 Chrome 插件**
+   - 解压下载的插件压缩包（例如：`chrome-mcp-server-latest.zip`）
    - 打开 Chrome 并访问 `chrome://extensions/`
-   - 启用"开发者模式"
-   - 点击"加载已解压的扩展程序"，选择 `your/dowloaded/extension/folder`
-   - 点击插件图标打开插件，点击连接即可看到mcp的配置
-     <img width="475" alt="截屏2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
+   - 启用右上角的"开发者模式"
+   - 点击"加载已解压的扩展程序"
+   - 选择解压后的插件文件夹（通常包含 `manifest.json` 的目录）
+   - 插件安装成功！
+
+3. **启动本地 MCP 服务器**
+
+   ```bash
+   # 解压服务器部署包
+   tar -xzf native-server-deploy.tar.gz
+   cd native-server-deploy  # 或解压后的文件夹名称
+
+   # 安装依赖（仅首次需要）
+   npm install --production
+
+   # 启动服务器（默认端口 12306）
+   node start-server-only.js 12306
+   ```
+
+   启动成功后，您会看到类似以下输出：
+
+   ```
+   🚀 Starting Chrome MCP HTTP Server (standalone mode)...
+   📡 Port: 12306
+   🌍 Host: 0.0.0.0
+   ✅ Server started successfully!
+   🔗 MCP Endpoint: http://0.0.0.0:12306/mcp
+   💓 Health Check: http://0.0.0.0:12306/ping
+   ```
+
+4. **配置插件连接**
+   - 点击浏览器工具栏的插件图标
+   - 选择"HTTP 连接"模式
+   - 输入服务器地址：`http://127.0.0.1:12306`
+   - 点击"连接"
+   - 连接成功后，状态显示"✅ 已连接"
+
+5. **配置 MCP 客户端**
+
+   在您的 MCP 客户端（如 CherryStudio、Dify 等）中添加以下配置：
+
+   ```json
+   {
+     "mcpServers": {
+       "chrome-mcp-server": {
+         "type": "streamableHttp",
+         "url": "http://127.0.0.1:12306/mcp"
+       }
+     }
+   }
+   ```
+
+#### 使用 PM2 管理服务器（可选，推荐生产环境）
+
+如果您希望服务器在后台运行，可以使用 PM2：
+
+```bash
+# 安装 PM2（如果未安装）
+npm install -g pm2
+
+# 启动服务器
+cd native-server-deploy
+pm2 start start-server-only.js --name mcp-chrome -- 12306
+
+# 查看状态
+pm2 status
+
+# 查看日志
+pm2 logs mcp-chrome
+
+# 设置开机自启
+pm2 save
+pm2 startup
+```
+
+### 方式二：从源码构建和开发（适合开发者）
+
+> 💡 **提示**：如果您只是想使用本工具，建议使用**方式一**（预构建版本），更简单快捷。方式二适合需要修改代码、贡献代码或了解项目内部结构的开发者。
+
+#### 1. 克隆项目
+
+```bash
+git clone https://github.com/ZodOpen/mcp-chrome.git
+cd mcp-chrome
+```
+
+#### 2. 安装依赖
+
+```bash
+pnpm install
+```
+
+#### 3. 构建项目
+
+```bash
+# 构建所有模块
+pnpm build
+
+# 或者分步构建
+pnpm build:shared    # 构建 shared 包
+pnpm build:native    # 构建 native-server
+pnpm build:extension # 构建 Chrome 插件
+```
+
+#### 4. 本地开发
+
+**开发 Native Server（本地 MCP 服务器）**
+
+```bash
+# 方式1：使用开发模式（自动重启）
+cd app/native-server
+pnpm dev
+
+# 方式2：手动启动（仅启动 HTTP 服务器，不依赖 Native Messaging）
+node start-server-only.js 12306
+```
+
+**开发 Chrome 插件**
+
+```bash
+cd app/chrome-extension
+pnpm dev
+```
+
+开发模式下，插件会自动重新加载，修改代码后刷新浏览器即可看到效果。
+
+#### 5. 加载开发版插件
+
+1. 打开 Chrome 并访问 `chrome://extensions/`
+2. 启用"开发者模式"
+3. 点击"加载已解压的扩展程序"
+4. 选择目录：`app/chrome-extension/.output/chrome-mv3/`
+
+#### 6. 打包部署
+
+**打包 Chrome 插件**
+
+```bash
+cd app/chrome-extension
+pnpm build
+```
+
+构建产物位于：`app/chrome-extension/.output/chrome-mv3/`
+
+**打包 Native Server 部署包**
+
+```bash
+cd app/native-server
+
+# 确保已构建
+pnpm build
+
+# 准备部署包
+chmod +x prepare-deploy.sh
+./prepare-deploy.sh
+```
+
+部署包位置：`app/native-server/native-server-deploy.tar.gz`
+
+详细部署说明请参考：[构建和部署文档](docs/BUILD_AND_DEPLOY.md)
 
 ### 在支持MCP协议的客户端中使用
 
-#### 使用streamable http的方式连接（👍🏻推荐）
+#### 方式一：本地连接（本地运行 MCP 服务器）
 
-将以下配置添加到客户端的 MCP 配置中以cherryStudio为例：
+##### 1.1 使用 Streamable HTTP 连接（👍🏻 推荐）
 
-> 推荐用streamable http的连接方式
+将以下配置添加到客户端的 MCP 配置中（以 CherryStudio 为例）：
 
 ```json
 {
@@ -104,11 +247,11 @@ mcp-chrome-bridge register
 }
 ```
 
-#### 使用stdio的方式连接（备选）
+##### 1.2 使用 STDIO 连接（备选）
 
-假设你的客户端仅支持stdio的连接方式，那么请使用下面的方法：
+如果您的客户端仅支持 STDIO 连接方式，请使用以下方法：
 
-1. 先查看你刚刚安装的npm包的安装位置
+1. 先查看您刚刚安装的 npm 包的安装位置
 
 ```sh
 # npm 查看方式
@@ -117,10 +260,10 @@ npm list -g mcp-chrome-bridge
 pnpm list -g mcp-chrome-bridge
 ```
 
-假设上面的命令输出的路径是：/Users/xxx/Library/pnpm/global/5
-那么你的最终路径就是：/Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js
+假设上面的命令输出的路径是：`/Users/xxx/Library/pnpm/global/5`
+那么您的最终路径就是：`/Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js`
 
-2. 把下面的配置替换成你刚刚得到的最终路径
+2. 把下面的配置替换成您刚刚得到的最终路径
 
 ```json
 {
@@ -136,9 +279,88 @@ pnpm list -g mcp-chrome-bridge
 }
 ```
 
-比如：在augment中的配置如下：
+#### 方式二：远程连接（远程服务器 + 浏览器插件）
 
-<img width="494" alt="截屏2025-06-22 22 11 25" src="https://github.com/user-attachments/assets/07c0b090-622b-433d-be70-44e8cb8980a5" />
+##### 2.1 部署远程 MCP 服务器
+
+1. **构建服务器部署包**
+
+```bash
+# 在项目根目录
+cd app/native-server
+
+# 构建 shared 包（如果还没构建）
+cd ../../packages/shared
+pnpm build
+
+# 构建 native-server
+cd ../../app/native-server
+pnpm build
+
+# 准备部署包
+chmod +x prepare-deploy.sh
+./prepare-deploy.sh
+```
+
+部署包位置：`app/native-server/native-server-deploy.tar.gz`
+
+2. **上传并部署到远程服务器**
+
+```bash
+# 上传到服务器
+scp app/native-server/native-server-deploy.tar.gz root@your-server:/root/
+
+# SSH 到服务器
+ssh root@your-server
+
+# 解压并安装
+cd /root
+mkdir -p mcp-server
+tar -xzf native-server-deploy.tar.gz -C mcp-server/
+cd mcp-server
+npm install --production
+
+# 启动服务器（使用 PM2 管理）
+pm2 start start-server-only.js --name mcp-chrome -- 12306
+pm2 save
+pm2 startup
+```
+
+3. **配置客户端连接远程服务器**
+
+在您的 MCP 客户端配置中添加：
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp-server-remote": {
+      "type": "streamableHttp",
+      "url": "http://your-server-ip:12306/mcp"
+    }
+  }
+}
+```
+
+##### 2.2 配置浏览器插件连接远程服务器
+
+1. **加载 Chrome 插件**（参考下方"加载 Chrome 扩展"部分）
+
+2. **在插件中配置远程连接**
+   - 打开插件弹窗
+   - 选择"远程 WebSocket"连接模式
+   - 输入远程服务器地址：`ws://your-server-ip:12306/browser-ws`
+   - 点击"连接"
+
+   或者使用 HTTP 连接模式：
+   - 选择"HTTP 连接"模式
+   - 输入远程服务器地址：`http://your-server-ip:12306`
+   - 点击"连接"
+
+3. **验证连接**
+
+   连接成功后，插件状态应显示"✅ 已连接"，此时远程服务器即可控制您的浏览器。
+
+> 💡 **提示**：远程连接模式下，浏览器插件会通过 WebSocket 或 HTTP 连接到远程服务器，服务器接收来自 AI 客户端的 MCP 请求后，会转发给已连接的浏览器插件执行。
 
 ## 🛠️ 可用工具
 
@@ -196,101 +418,6 @@ pnpm list -g mcp-chrome-bridge
 - `chrome_bookmark_delete` - 删除书签
 </details>
 
-## 🧪 使用示例
-
-### ai帮你总结网页内容然后自动控制excalidraw画图
-
-prompt: [excalidraw-prompt](prompt/excalidraw-prompt.md)
-指令：帮我总结当前页面内容，然后画个图帮我理解
-https://www.youtube.com/watch?v=3fBPdUBWVz0
-
-https://github.com/user-attachments/assets/f14f79a6-9390-4821-8296-06d020bcfc07
-
-### ai先分析图片的内容元素，然后再自动控制excalidraw把图片模仿出来
-
-prompt: [excalidraw-prompt](prompt/excalidraw-prompt.md)|[content-analize](prompt/content-analize.md)
-指令：先看下图片是否能用excalidraw画出来，如果则列出所需的步骤和元素，然后画出来
-https://www.youtube.com/watch?v=tEPdHZBzbZk
-
-https://github.com/user-attachments/assets/4f0600c1-bb1e-4b57-85ab-36c8bdf71c68
-
-### ai自动帮你注入脚本并修改网页的样式
-
-prompt: [modify-web-prompt](prompt/modify-web.md)
-指令：帮我修改当前页面的样式，去掉广告
-https://youtu.be/twI6apRKHsk
-
-https://github.com/user-attachments/assets/aedbe98d-e90c-4a58-a4a5-d888f7293d8e
-
-### ai自动帮你捕获网络请求
-
-指令：我想知道小红书的搜索接口是哪个，响应体结构是什么样的
-https://youtu.be/1hHKr7XKqnQ
-
-https://github.com/user-attachments/assets/dc7e5cab-b9af-4b9a-97ce-18e4837318d9
-
-### ai帮你分析你的浏览记录
-
-指令：分析一下我近一个月的浏览记录
-https://youtu.be/jf2UZfrR2Vk
-
-https://github.com/user-attachments/assets/31b2e064-88c6-4adb-96d7-50748b826eae
-
-### 网页对话
-
-指令：翻译并总结当前网页
-https://youtu.be/FlJKS9UQyC8
-
-https://github.com/user-attachments/assets/aa8ef2a1-2310-47e6-897a-769d85489396
-
-### ai帮你自动截图（网页截图）
-
-指令：把huggingface的首页截个图
-https://youtu.be/7ycK6iksWi4
-
-https://github.com/user-attachments/assets/65c6eee2-6366-493d-a3bd-2b27529ff5b3
-
-### ai帮你自动截图（元素截图）
-
-指令：把huggingface首页的图标截取下来
-https://youtu.be/ev8VivANIrk
-
-https://github.com/user-attachments/assets/d0cf9785-c2fe-4729-a3c5-7f2b8b96fe0c
-
-### ai帮你管理书签
-
-指令：将当前页面添加到书签中，放到合适的文件夹
-https://youtu.be/R_83arKmFTo
-
-https://github.com/user-attachments/assets/15a7d04c-0196-4b40-84c2-bafb5c26dfe0
-
-### 自动关闭网页
-
-指令：关闭所有shadcn相关的网页
-https://youtu.be/2wzUT6eNVg4
-
-https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
-
-## 🤝 贡献指南
-
-我们欢迎贡献！请查看 [CONTRIBUTING_zh.md](docs/CONTRIBUTING_zh.md) 了解详细指南。
-
-## 🚧 未来发展路线图
-
-我们对 Chrome MCP Server 的未来发展有着激动人心的计划：
-
-- [ ] 身份认证
-
-- [ ] 录制与回放
-
-- [ ] 工作流自动化
-
-- [ ] 增强浏览器支持（Firefox 扩展）
-
----
-
-**想要为这些功能中的任何一个做贡献？** 查看我们的[贡献指南](docs/CONTRIBUTING_zh.md)并加入我们的开发社区！
-
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
@@ -300,9 +427,6 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 - [架构设计](docs/ARCHITECTURE_zh.md) - 详细的技术架构说明
 - [工具列表](docs/TOOLS_zh.md) - 完整的工具 API 文档
 - [故障排除](docs/TROUBLESHOOTING_zh.md) - 常见问题解决方案
-
-## 微信交流群
-
-拉群的目的是让踩过坑的大佬们互相帮忙解答问题，因本人平时要忙着搬砖，不一定能及时解答
+- [构建和部署](docs/BUILD_AND_DEPLOY.md) - 详细的构建和部署流程
 
 ![IMG_6296](https://github.com/user-attachments/assets/ecd2e084-24d2-4038-b75f-3ab020b55594)

@@ -6,6 +6,7 @@
  * - Plugin registration (CORS, etc.)
  * - Route delegation to specialized modules
  * - MCP transport handling
+ * - WebSocket server for remote browser connections
  * - Server lifecycle management
  */
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -29,6 +30,8 @@ import { CodexEngine } from '../agent/engines/codex';
 import { ClaudeEngine } from '../agent/engines/claude';
 import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
+import { BrowserWebSocketServer } from '../browser-connection/websocket-server';
+import { setBrowserWebSocketServer } from '../mcp/remote-browser-tools';
 
 // ============================================================
 // Types
@@ -50,6 +53,7 @@ export class Server {
     new Map();
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
+  private browserWebSocketServer: BrowserWebSocketServer | null = null;
 
   constructor() {
     this.fastify = Fastify({ logger: SERVER_CONFIG.LOGGER_ENABLED });
@@ -310,13 +314,30 @@ export class Server {
         }
       }
     });
+
+    // Remote browser connections status
+    this.fastify.get('/browser-connections', async (request, reply) => {
+      if (!this.browserWebSocketServer) {
+        reply.send({ enabled: false, message: 'Remote browser connections not enabled' });
+        return;
+      }
+
+      const stats = this.browserWebSocketServer.getConnectionManager().getStats();
+      reply.send({
+        enabled: true,
+        ...stats,
+      });
+    });
   }
 
   // ============================================================
   // Server Lifecycle
   // ============================================================
 
-  public async start(port = NATIVE_SERVER_PORT, nativeHost: NativeMessagingHost): Promise<void> {
+  public async start(
+    port = NATIVE_SERVER_PORT,
+    nativeHost: NativeMessagingHost | null,
+  ): Promise<void> {
     if (!this.nativeHost) {
       this.nativeHost = nativeHost;
     } else if (this.nativeHost !== nativeHost) {
@@ -334,6 +355,27 @@ export class Server {
       process.env.CHROME_MCP_PORT = String(port);
       process.env.MCP_HTTP_PORT = String(port);
 
+      // Initialize WebSocket server for remote browser connections
+      this.browserWebSocketServer = new BrowserWebSocketServer(this.fastify.server);
+
+      // Setup WebSocket upgrade handler
+      this.fastify.server.on('upgrade', (request, socket, head) => {
+        if (request.url === '/browser-ws' && this.browserWebSocketServer) {
+          const wss = this.browserWebSocketServer.getWebSocketServer();
+          if (wss) {
+            wss.handleUpgrade(request, socket, head, (ws) => {
+              wss.emit('connection', ws, request);
+            });
+          }
+        }
+      });
+
+      this.browserWebSocketServer.start();
+      console.log('[Server] ✅ WebSocket server started for remote browser connections');
+
+      // Make WebSocket server available to MCP tools
+      setBrowserWebSocketServer(this.browserWebSocketServer);
+
       this.isRunning = true;
     } catch (err) {
       this.isRunning = false;
@@ -347,6 +389,14 @@ export class Server {
     }
 
     try {
+      // Shutdown WebSocket server first
+      if (this.browserWebSocketServer) {
+        console.log('[Server] Shutting down WebSocket server...');
+        this.browserWebSocketServer.shutdown();
+        this.browserWebSocketServer = null;
+        setBrowserWebSocketServer(null);
+      }
+
       await this.fastify.close();
       closeDb();
       this.isRunning = false;
@@ -359,6 +409,14 @@ export class Server {
 
   public getInstance(): FastifyInstance {
     return this.fastify;
+  }
+
+  public getHost(): string {
+    return SERVER_CONFIG.HOST;
+  }
+
+  public getBrowserWebSocketServer(): BrowserWebSocketServer | null {
+    return this.browserWebSocketServer;
   }
 }
 

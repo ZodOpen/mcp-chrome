@@ -4,7 +4,7 @@
     <div v-show="currentView === 'home'" class="home-view">
       <div class="header">
         <div class="header-content">
-          <h1 class="header-title">Chrome MCP Server</h1>
+          <h1 class="header-title">Chrome MCP</h1>
         </div>
       </div>
       <div class="content">
@@ -15,13 +15,6 @@
             <div class="status-section">
               <div class="status-header">
                 <p class="status-label">{{ getMessage('runningStatusLabel') }}</p>
-                <button
-                  class="refresh-status-button"
-                  @click="refreshServerStatus"
-                  :title="getMessage('refreshStatusButton')"
-                >
-                  <RefreshIcon className="icon-small" />
-                </button>
               </div>
               <div class="status-info">
                 <span :class="['status-dot', getStatusClass()]"></span>
@@ -44,18 +37,88 @@
                 <pre class="mcp-config-json">{{ mcpConfigJson }}</pre>
               </div>
             </div>
-            <div class="port-section">
-              <label for="port" class="port-label">{{ getMessage('connectionPortLabel') }}</label>
+
+            <!-- 连接模式选择 -->
+            <div class="connection-mode-section">
+              <label class="mode-label">连接模式</label>
+              <div class="radio-group">
+                <label class="radio-option">
+                  <input
+                    type="radio"
+                    name="connectionMode"
+                    value="native"
+                    v-model="connectionMode"
+                    @change="onConnectionModeChange"
+                  />
+                  <span>本地服务器连接</span>
+                </label>
+                <label class="radio-option">
+                  <input
+                    type="radio"
+                    name="connectionMode"
+                    value="http"
+                    v-model="connectionMode"
+                    @change="onConnectionModeChange"
+                  />
+                  <span>远程 HTTP 服务器</span>
+                </label>
+                <label class="radio-option">
+                  <input
+                    type="radio"
+                    name="connectionMode"
+                    value="websocket"
+                    v-model="connectionMode"
+                    @change="onConnectionModeChange"
+                  />
+                  <span>远程 WebSocket 服务器</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 本地端口输入（仅在 Native 模式显示） -->
+            <div v-if="connectionMode === 'native'" class="server-url-section">
+              <label for="port" class="server-url-label">{{
+                getMessage('connectionPortLabel')
+              }}</label>
               <input
                 type="text"
                 id="port"
                 :value="nativeServerPort"
                 @input="updatePort"
-                class="port-input"
+                class="server-url-input"
               />
+              <p class="hint-text">默认端口: 12306</p>
             </div>
 
-            <button class="connect-button" :disabled="isConnecting" @click="testNativeConnection">
+            <!-- 远程 HTTP 服务器地址输入（仅在 HTTP 模式显示） -->
+            <div v-if="connectionMode === 'http'" class="server-url-section">
+              <label for="serverUrl" class="server-url-label">HTTP 服务器地址</label>
+              <input
+                type="text"
+                id="serverUrl"
+                v-model="serverUrl"
+                placeholder="http://192.168.1.100:12306"
+                class="server-url-input"
+              />
+              <p class="hint-text">示例: http://your-server-ip:12306</p>
+            </div>
+
+            <!-- 远程 WebSocket 地址输入（仅在 WebSocket 模式显示） -->
+            <div v-if="connectionMode === 'websocket'" class="server-url-section">
+              <label for="wsServerUrl" class="server-url-label">WebSocket 服务器地址</label>
+              <input
+                type="text"
+                id="wsServerUrl"
+                v-model="wsServerUrl"
+                placeholder="ws://192.168.1.100:12306/browser-ws"
+                class="server-url-input"
+              />
+              <p class="hint-text"
+                >示例: ws://your-server-ip:12306/browser-ws（生产环境使用 wss://）</p
+              >
+            </div>
+
+            <button class="connect-button" :disabled="isConnecting" @click="handleConnect">
               <BoltIcon />
               <span>{{
                 isConnecting
@@ -515,6 +578,13 @@ const runFlow = async (flowId: string) => {
 const nativeConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
 const isConnecting = ref(false);
 const nativeServerPort = ref<number>(12306);
+const localIpAddress = ref<string>('127.0.0.1');
+
+// 远程连接支持（HTTP + WebSocket）
+const connectionMode = ref<'native' | 'http' | 'websocket'>('native');
+const serverUrl = ref<string>('http://127.0.0.1:12306'); // HTTP 模式
+const wsServerUrl = ref<string>('ws://127.0.0.1:12306/browser-ws'); // WebSocket 模式
+const remoteConnectionStatus = ref<any>(null);
 
 const serverStatus = ref<{
   isRunning: boolean;
@@ -537,12 +607,302 @@ const mcpConfigJson = computed(() => {
     mcpServers: {
       'streamable-mcp-server': {
         type: 'streamable-http',
-        url: `http://127.0.0.1:${port}/mcp`,
+        url: `http://${localIpAddress.value}:${port}/mcp`,
       },
     },
   };
   return JSON.stringify(config, null, 2);
 });
+
+// 远程 WebSocket 连接状态
+const remoteStatusClass = computed(() => {
+  if (!remoteConnectionStatus.value) return 'disconnected';
+  return remoteConnectionStatus.value.connected ? 'connected' : 'disconnected';
+});
+
+const remoteStatusText = computed(() => {
+  if (!remoteConnectionStatus.value) return '未连接';
+  if (remoteConnectionStatus.value.connected) {
+    const uptime = Date.now() - (remoteConnectionStatus.value.connectedAt || Date.now());
+    const uptimeSeconds = Math.floor(uptime / 1000);
+    return `✅ 已连接 (${uptimeSeconds}秒)`;
+  }
+  return '❌ 未连接';
+});
+
+// 获取本机 IP 地址
+const getLocalIpAddress = async () => {
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pc.createDataChannel('');
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    return new Promise<string>((resolve) => {
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const candidate = event.candidate.candidate;
+          const ipRegex = /([0-9]{1,3}\.){3}[0-9]{1,3}/;
+          const match = candidate.match(ipRegex);
+          if (match) {
+            const ip = match[0];
+            // 过滤掉 127.0.0.1，优先使用局域网 IP
+            if (ip !== '127.0.0.1') {
+              localIpAddress.value = ip;
+              pc.close();
+              resolve(ip);
+            }
+          }
+        }
+      };
+
+      // 超时处理：3秒后如果没有获取到 IP，保持默认值
+      setTimeout(() => {
+        pc.close();
+        resolve(localIpAddress.value);
+      }, 3000);
+    });
+  } catch (error) {
+    console.error('获取本机 IP 失败:', error);
+    return '127.0.0.1';
+  }
+};
+
+// ============ HTTP 连接相关函数 ============
+
+// 加载 HTTP 连接配置
+const loadHttpConnectionConfig = async () => {
+  try {
+    const result = await chrome.storage.local.get(['connectionMode', 'httpServerUrl']);
+    if (result.connectionMode === 'http') {
+      connectionMode.value = 'http';
+    } else if (result.connectionMode === 'websocket') {
+      connectionMode.value = 'websocket';
+    }
+    if (result.httpServerUrl) {
+      serverUrl.value = result.httpServerUrl;
+    }
+  } catch (error) {
+    console.error('Failed to load HTTP connection config:', error);
+  }
+};
+
+// 连接模式改变时的处理
+const onConnectionModeChange = async () => {
+  try {
+    await chrome.storage.local.set({
+      connectionMode: connectionMode.value,
+    });
+
+    // 如果切换模式，断开当前连接
+    if (nativeConnectionStatus.value === 'connected') {
+      if (connectionMode.value === 'native') {
+        // 切换到 Native 模式，断开 HTTP 和 WebSocket 连接
+        await disconnectHttpServer();
+        await disconnectWebSocket();
+      } else if (connectionMode.value === 'http') {
+        // 切换到 HTTP 模式，断开 Native 和 WebSocket 连接
+        await chrome.runtime.sendMessage({ type: 'DISCONNECT_NATIVE' });
+        await disconnectWebSocket();
+      } else if (connectionMode.value === 'websocket') {
+        // 切换到 WebSocket 模式，断开 Native 和 HTTP 连接
+        await chrome.runtime.sendMessage({ type: 'DISCONNECT_NATIVE' });
+        await disconnectHttpServer();
+      }
+      nativeConnectionStatus.value = 'disconnected';
+    }
+  } catch (error) {
+    console.error('Failed to change connection mode:', error);
+  }
+};
+
+// 统一的连接处理函数
+const handleConnect = async () => {
+  if (nativeConnectionStatus.value === 'connected') {
+    // 断开连接
+    if (connectionMode.value === 'http') {
+      await disconnectHttpServer();
+    } else if (connectionMode.value === 'websocket') {
+      await disconnectWebSocket();
+    } else {
+      await chrome.runtime.sendMessage({ type: 'DISCONNECT_NATIVE' });
+    }
+    return;
+  }
+
+  // 建立连接
+  if (connectionMode.value === 'http') {
+    await connectHttpServer();
+  } else if (connectionMode.value === 'websocket') {
+    await connectWebSocket();
+  } else {
+    await testNativeConnection();
+  }
+};
+
+// HTTP 连接函数
+const connectHttpServer = async () => {
+  if (!serverUrl.value) {
+    alert('请输入服务器地址');
+    return;
+  }
+
+  // 验证 URL 格式
+  try {
+    new URL(serverUrl.value);
+  } catch (error) {
+    alert('服务器地址格式不正确，请输入完整的 URL，例如: http://192.168.1.100:12306');
+    return;
+  }
+
+  isConnecting.value = true;
+
+  try {
+    // 保存服务器 URL
+    await chrome.storage.local.set({ httpServerUrl: serverUrl.value });
+
+    console.log('[HTTP Connect] 发送连接请求到 background:', serverUrl.value);
+
+    // 发送连接请求到 background
+    const response = await chrome.runtime.sendMessage({
+      type: 'HTTP_CONNECT',
+      url: serverUrl.value,
+    });
+
+    console.log('[HTTP Connect] 收到 background 响应:', response);
+
+    if (response && response.success && response.connected) {
+      nativeConnectionStatus.value = 'connected';
+      console.log('[HTTP Connect] ✅ HTTP 连接成功');
+
+      // 更新服务器状态
+      if (response.serverStatus) {
+        serverStatus.value = response.serverStatus;
+        console.log('[HTTP Connect] 服务器状态已更新:', response.serverStatus);
+      } else {
+        // 即使没有返回 serverStatus，也设置一个默认状态
+        serverStatus.value = {
+          isRunning: true,
+          port: extractPortFromUrl(serverUrl.value),
+          lastUpdated: Date.now(),
+        };
+      }
+    } else {
+      nativeConnectionStatus.value = 'disconnected';
+      console.error('[HTTP Connect] ❌ 连接失败，响应数据:', response);
+      const errorMsg = response?.error || '未知错误';
+      alert(
+        `连接失败: ${errorMsg}\n\n请检查：\n1. 服务器是否正在运行\n2. 服务器地址是否正确\n3. 网络连接是否正常`,
+      );
+    }
+  } catch (error) {
+    console.error('[HTTP Connect] ❌ 连接异常:', error);
+    nativeConnectionStatus.value = 'disconnected';
+    alert('连接失败: ' + (error instanceof Error ? error.message : String(error)));
+  } finally {
+    isConnecting.value = false;
+  }
+};
+
+// HTTP 断开连接函数
+const disconnectHttpServer = async () => {
+  try {
+    await chrome.runtime.sendMessage({ type: 'HTTP_DISCONNECT' });
+    nativeConnectionStatus.value = 'disconnected';
+    serverStatus.value = {
+      isRunning: false,
+      lastUpdated: Date.now(),
+    };
+  } catch (error) {
+    console.error('Failed to disconnect HTTP server:', error);
+  }
+};
+
+// ============ WebSocket 远程连接相关函数 ============
+
+// 连接远程 WebSocket 服务器
+const connectWebSocket = async () => {
+  try {
+    nativeConnectionStatus.value = 'connecting';
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'REMOTE_CONNECT',
+      serverUrl: wsServerUrl.value,
+    });
+
+    if (response && response.success) {
+      nativeConnectionStatus.value = 'connected';
+      remoteConnectionStatus.value = response.status;
+
+      // 保存配置
+      await chrome.storage.local.set({
+        remoteServerUrl: wsServerUrl.value,
+        remoteEnabled: true,
+      });
+
+      console.log('[App] WebSocket connected successfully');
+    } else {
+      throw new Error(response?.error || 'Connection failed');
+    }
+  } catch (error: any) {
+    console.error('[App] WebSocket connection failed:', error);
+    nativeConnectionStatus.value = 'disconnected';
+    remoteConnectionStatus.value = null;
+    alert(`连接失败: ${error.message}`);
+  }
+};
+
+// 断开远程 WebSocket 连接
+const disconnectWebSocket = async () => {
+  try {
+    await chrome.runtime.sendMessage({ type: 'REMOTE_DISCONNECT' });
+    nativeConnectionStatus.value = 'disconnected';
+    remoteConnectionStatus.value = null;
+
+    console.log('[App] WebSocket disconnected');
+  } catch (error) {
+    console.error('[App] Failed to disconnect WebSocket:', error);
+  }
+};
+
+// 加载远程 WebSocket 配置
+const loadWebSocketConfig = async () => {
+  try {
+    const result = await chrome.storage.local.get(['remoteServerUrl', 'remoteEnabled']);
+
+    if (result.remoteServerUrl) {
+      wsServerUrl.value = result.remoteServerUrl;
+    }
+
+    // 获取远程连接状态
+    const statusResponse = await chrome.runtime.sendMessage({ type: 'REMOTE_GET_STATUS' });
+    if (statusResponse && statusResponse.success) {
+      remoteConnectionStatus.value = statusResponse.status;
+
+      // 明确设置连接状态，而不是只在连接成功时设置
+      if (statusResponse.status.connected) {
+        nativeConnectionStatus.value = 'connected';
+      } else {
+        nativeConnectionStatus.value = 'disconnected';
+      }
+    }
+  } catch (error) {
+    console.error('[App] Failed to load WebSocket config:', error);
+    // 如果获取状态失败，设置为未连接
+    nativeConnectionStatus.value = 'disconnected';
+  }
+};
+
+// 从 URL 提取端口号
+const extractPortFromUrl = (url: string): number | undefined => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.port ? parseInt(urlObj.port) : urlObj.protocol === 'https:' ? 443 : 80;
+  } catch {
+    return undefined;
+  }
+};
 
 const currentModel = ref<ModelPreset | null>(null);
 const isModelSwitching = ref(false);
@@ -600,11 +960,25 @@ const availableModels = computed(() => {
 
 const getStatusClass = () => {
   if (nativeConnectionStatus.value === 'connected') {
-    if (serverStatus.value.isRunning) {
+    // WebSocket 远程连接模式
+    if (connectionMode.value === 'websocket' && remoteConnectionStatus.value?.connected) {
       return 'bg-emerald-500';
-    } else {
-      return 'bg-yellow-500';
     }
+    // HTTP 远程连接模式
+    if (connectionMode.value === 'http' && serverStatus.value.isRunning) {
+      return 'bg-emerald-500';
+    }
+    // Native Messaging 模式 - 只有服务运行才显示绿色
+    if (connectionMode.value === 'native') {
+      if (serverStatus.value.isRunning) {
+        return 'bg-emerald-500';
+      } else {
+        // Native 模式服务未运行，显示红色（未连接）
+        return 'bg-red-500';
+      }
+    }
+    // 其他远程模式已连接但服务未就绪
+    return 'bg-yellow-500';
   } else if (nativeConnectionStatus.value === 'disconnected') {
     return 'bg-red-500';
   } else {
@@ -701,13 +1075,30 @@ function openBuilderWindow(flowId?: string, focusNodeId?: string) {
 
 const getStatusText = () => {
   if (nativeConnectionStatus.value === 'connected') {
-    if (serverStatus.value.isRunning) {
-      return getMessage('serviceRunningStatus', [
-        (serverStatus.value.port || 'Unknown').toString(),
-      ]);
-    } else {
-      return getMessage('connectedServiceNotStartedStatus');
+    // WebSocket 远程连接模式
+    if (connectionMode.value === 'websocket' && remoteConnectionStatus.value?.connected) {
+      const uptime = remoteConnectionStatus.value.connectedAt
+        ? Math.floor((Date.now() - remoteConnectionStatus.value.connectedAt) / 1000)
+        : 0;
+      return `已连接到远程服务器 (${uptime}秒)`;
     }
+    // HTTP 远程连接模式
+    if (connectionMode.value === 'http' && serverStatus.value.isRunning) {
+      return `已连接到远程服务器 (端口 ${serverStatus.value.port || 'Unknown'})`;
+    }
+    // Native Messaging 模式 - 只有服务运行才显示已连接
+    if (connectionMode.value === 'native') {
+      if (serverStatus.value.isRunning) {
+        return getMessage('serviceRunningStatus', [
+          (serverStatus.value.port || 'Unknown').toString(),
+        ]);
+      } else {
+        // Native 模式下，如果服务未运行，显示为未连接
+        return getMessage('serviceNotConnectedStatus');
+      }
+    }
+    // 其他远程模式已连接但服务未启动（HTTP 模式）
+    return getMessage('connectedServiceNotStartedStatus');
   } else if (nativeConnectionStatus.value === 'disconnected') {
     return getMessage('serviceNotConnectedStatus');
   } else {
@@ -1013,7 +1404,13 @@ const checkServerStatus = async () => {
     }
 
     if (response?.connected !== undefined) {
-      nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
+      // Native 模式下，只有服务运行才算连接成功
+      if (connectionMode.value === 'native') {
+        nativeConnectionStatus.value =
+          response.connected && response.serverStatus?.isRunning ? 'connected' : 'disconnected';
+      } else {
+        nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
+      }
     }
   } catch (error) {
     console.error('检测服务器状态失败:', error);
@@ -1071,18 +1468,94 @@ const testNativeConnection = async () => {
         type: 'connectNative',
         port: nativeServerPort.value,
       });
+
       if (response && response.success) {
-        nativeConnectionStatus.value = 'connected';
-        console.log('连接成功:', response);
-        await savePortPreference(nativeServerPort.value);
+        console.log('Native Host 连接响应:', response);
+
+        // 连接成功后，检查服务状态
+        await checkServerStatus();
+
+        // 等待一小段时间让服务状态更新
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // 再次检查服务状态，确保获取到最新状态
+        await checkServerStatus();
+
+        // 判断服务是否真正运行
+        if (serverStatus.value.isRunning) {
+          nativeConnectionStatus.value = 'connected';
+          console.log('✅ 连接成功，服务运行中');
+          await savePortPreference(nativeServerPort.value);
+        } else {
+          // Native Host 连接成功，但服务未运行
+          nativeConnectionStatus.value = 'disconnected';
+          console.warn('⚠️ Native Host 已连接，但服务未启动');
+
+          const errorMessage =
+            '连接失败：服务未启动\n\n' +
+            'Native Messaging Host 已连接，但 MCP 服务未运行。\n\n' +
+            '可能的原因：\n' +
+            '1. 服务启动失败（端口被占用或其他错误）\n' +
+            '2. 配置的端口号不正确\n\n' +
+            `当前端口: ${nativeServerPort.value}\n\n` +
+            '建议：\n' +
+            '1. 检查端口是否被占用\n' +
+            '2. 查看控制台错误日志\n' +
+            '3. 尝试使用其他端口号（如 3000、8080 等）';
+
+          alert(errorMessage);
+        }
       } else {
         nativeConnectionStatus.value = 'disconnected';
-        console.error('连接失败:', response);
+        console.error('❌ 连接失败:', response);
+
+        // 弹窗提示连接失败原因
+        let errorMessage = '无法连接到本地服务';
+        if (response && response.error) {
+          const error = response.error.toString();
+          if (error.includes('forbidden')) {
+            errorMessage =
+              '连接失败：未安装或未注册 Native Messaging Host\n\n' +
+              '请按照以下步骤操作：\n' +
+              '1. 安装 mcp-chrome-bridge：\n' +
+              '   npm install -g mcp-chrome-bridge\n\n' +
+              '2. 注册 Native Host：\n' +
+              '   npx mcp-chrome-bridge register\n\n' +
+              '3. 刷新插件后重试\n\n' +
+              '💡 提示：如果使用 pnpm，请使用：\n' +
+              '   pnpm add -g mcp-chrome-bridge';
+          } else if (error.includes('not found')) {
+            errorMessage =
+              '连接失败：找不到 Native Messaging Host\n\n' +
+              '请确认已正确安装 mcp-chrome-bridge\n\n' +
+              '安装命令：npm install -g mcp-chrome-bridge';
+          } else {
+            errorMessage =
+              `连接失败：${error}\n\n` +
+              '请检查：\n' +
+              '1. 是否已安装 mcp-chrome-bridge\n' +
+              '2. Native Host 是否正确注册\n' +
+              `3. 端口号是否正确 (当前端口: ${nativeServerPort.value})`;
+          }
+        } else {
+          errorMessage =
+            '连接失败：未知错误\n\n' +
+            '请检查：\n' +
+            '1. 是否已安装 mcp-chrome-bridge\n' +
+            '2. Native Host 是否正确注册\n' +
+            '3. 查看控制台了解详细错误信息';
+        }
+
+        alert(errorMessage);
       }
     }
   } catch (error) {
-    console.error('测试连接失败:', error);
+    console.error('❌ 测试连接异常:', error);
     nativeConnectionStatus.value = 'disconnected';
+
+    // 弹窗提示异常错误
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    alert(`连接异常：${errorMsg}\n\n请查看控制台了解详细信息`);
   } finally {
     isConnecting.value = false;
   }
@@ -1502,6 +1975,18 @@ const setupServerStatusListener = () => {
       serverStatus.value = message.payload as any;
       console.log('Server status updated:', message.payload);
     }
+    // Remote connection status changes
+    if (message.type === 'REMOTE_STATUS_CHANGED' && message.payload) {
+      remoteConnectionStatus.value = message.payload as any;
+      console.log('[Popup] Remote status updated:', message.payload);
+
+      // Update nativeConnectionStatus based on remote connection status
+      if (connectionMode.value === 'websocket') {
+        nativeConnectionStatus.value = (message.payload as any).connected
+          ? 'connected'
+          : 'disconnected';
+      }
+    }
     // Flows changed - refresh list (IndexedDB-based notification)
     if (message.type === BACKGROUND_MESSAGE_TYPES.RR_FLOWS_CHANGED) {
       loadFlows();
@@ -1515,10 +2000,28 @@ const setupServerStatusListener = () => {
 onMounted(async () => {
   // 初始化主题
   await initTheme();
+  // 获取本机 IP 地址
+  await getLocalIpAddress();
   await loadPortPreference();
   await loadModelPreference();
-  await checkNativeConnection();
-  await checkServerStatus();
+
+  // 加载 HTTP 连接配置
+  await loadHttpConnectionConfig();
+  // 加载 WebSocket 连接配置
+  await loadWebSocketConfig();
+
+  // 根据连接模式检查相应的连接状态
+  if (connectionMode.value === 'websocket') {
+    // WebSocket 模式：状态已在 loadWebSocketConfig 中加载，不需要检查 Native 连接
+    console.log('[Popup] WebSocket mode: Skip native connection check');
+  } else if (connectionMode.value === 'http') {
+    // HTTP 模式：状态已在 loadHttpConnectionConfig 中加载
+    console.log('[Popup] HTTP mode: Skip native connection check');
+  } else {
+    // Native 模式：需要检查 Native Messaging 连接和服务器状态
+    await checkNativeConnection();
+    await checkServerStatus();
+  }
   await refreshStorageStats();
   await loadCacheStats();
   await loadFlows();
@@ -1658,6 +2161,37 @@ onUnmounted(() => {
 
 .status-dot.bg-gray-500 {
   background-color: #6b7280;
+}
+
+.status-dot.connected {
+  background-color: #10b981;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-dot.disconnected {
+  background-color: #ef4444;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #475569;
 }
 
 .status-text {
@@ -2675,5 +3209,106 @@ onUnmounted(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(12px);
+}
+
+/* ============ 远程 HTTP 连接样式 ============ */
+
+/* 连接模式选择 */
+.connection-mode-section {
+  margin-bottom: 16px;
+}
+
+.mode-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--ac-text, #1a1a1a);
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.radio-option input[type='radio'] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.radio-option span {
+  font-size: 14px;
+  color: var(--ac-text, #1a1a1a);
+}
+
+.radio-option:hover span {
+  color: var(--ac-primary, #007aff);
+}
+
+/* 服务器地址输入 */
+.server-url-section {
+  margin-bottom: 16px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 120px;
+    margin-bottom: 16px;
+  }
+}
+
+.server-url-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--ac-text, #1a1a1a);
+}
+
+.server-url-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ac-border, #e0e0e0);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: all 0.2s ease;
+  background: var(--ac-surface, white);
+  color: var(--ac-text, #1a1a1a);
+}
+
+.server-url-input:focus {
+  outline: none;
+  border-color: var(--ac-primary, #007aff);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.server-url-input::placeholder {
+  color: var(--ac-text-muted, #999999);
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--ac-text-muted, #6e6e6e);
+  margin-top: 6px;
+  margin-bottom: 0;
 }
 </style>

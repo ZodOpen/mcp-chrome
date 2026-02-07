@@ -11,6 +11,8 @@ import { initWebEditorListeners } from './web-editor';
 import { initQuickPanelAgentHandler } from './quick-panel/agent-handler';
 import { initQuickPanelCommands } from './quick-panel/commands';
 import { initQuickPanelTabsHandler } from './quick-panel/tabs-handler';
+import { initHttpConnectionListener, initHttpConnection } from './http-connection';
+import { initRemoteConnection } from './remote-connection';
 
 // Record-Replay V3 (feature flag)
 import { bootstrapV3 } from './record-replay-v3/bootstrap';
@@ -38,6 +40,9 @@ export default defineBackground(() => {
 
   // Initialize core services
   initNativeHostListener();
+  initHttpConnectionListener(); // 远程 HTTP 连接支持
+  initHttpConnection(); // 初始化 HTTP 连接配置
+  initRemoteConnection(); // 远程 WebSocket 连接支持
   initSemanticSimilarityListener();
   initStorageManagerListener();
   // Record & Replay V1/V2 listeners

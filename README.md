@@ -26,8 +26,15 @@ Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) ser
 
 - 😁 **Chatbot/Model Agnostic**: Let any LLM or chatbot client or agent you prefer automate your browser
 - ⭐️ **Use Your Original Browser**: Seamlessly integrate with your existing browser environment (your configurations, login states, etc.)
-- 💻 **Fully Local**: Pure local MCP server ensuring user privacy
-- 🚄 **Streamable HTTP**: Streamable HTTP connection method
+- 💻 **Local and Remote Modes**: Support both fully local operation (privacy-first) and remote server deployment (flexible scaling)
+- 🚄 **Multiple Connection Methods**:
+  - **Streamable HTTP**: HTTP connection method supported for both local and remote (recommended)
+  - **WebSocket Remote Connection**: Browser extension connects to remote server via WebSocket for remote control
+  - **STDIO**: Traditional standard input/output connection method
+- 🌐 **Remote Control Capabilities**:
+  - **HTTP Remote Connection**: Extension can directly connect to remote MCP server via HTTP
+  - **WebSocket Bidirectional Communication**: Real-time bidirectional communication between browser extension and remote server
+  - **Multi-Client Management**: Remote server can manage multiple browser client connections simultaneously
 - 🏎 **Cross-Tab**: Cross-tab context
 - 🧠 **Semantic Search**: Built-in vector database for intelligent browser tab content discovery
 - 🔍 **Smart Content Analysis**: AI-powered text extraction and similarity matching
@@ -52,40 +59,202 @@ Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) ser
 - Node.js >= 20.0.0 and pnpm/npm
 - Chrome/Chromium browser
 
-### Installation Steps
+### Method 1: Using Pre-built Version (Recommended for Beginners, Easiest)
 
-1. **Download the latest Chrome extension from GitHub**
+#### Quick Installation Steps
 
-Download link: https://github.com/hangwin/mcp-chrome/releases
+1. **Download Pre-built Packages from GitHub Releases**
 
-2. **Install mcp-chrome-bridge globally**
+Visit: https://github.com/ZodOpen/mcp-chrome/releases
 
-npm
+Download the following files:
+
+- **Chrome Extension Package**: `chrome-mcp-server-latest.zip` (or the latest version extension package)
+- **Native Server Deployment Package**: `native-server-deploy.tar.gz` (or the latest version server package)
+
+2. **Install Chrome Extension**
+   - Extract the downloaded extension package (e.g., `chrome-mcp-server-latest.zip`)
+   - Open Chrome and go to `chrome://extensions/`
+   - Enable "Developer mode" in the top right
+   - Click "Load unpacked"
+   - Select the extracted extension folder (the directory containing `manifest.json`)
+   - Extension installed successfully!
+
+3. **Start Local MCP Server**
+
+   ```bash
+   # Extract server deployment package
+   tar -xzf native-server-deploy.tar.gz
+   cd native-server-deploy  # or the extracted folder name
+
+   # Install dependencies (first time only)
+   npm install --production
+
+   # Start server (default port 12306)
+   node start-server-only.js 12306
+   ```
+
+   After successful startup, you'll see output similar to:
+
+   ```
+   🚀 Starting Chrome MCP HTTP Server (standalone mode)...
+   📡 Port: 12306
+   🌍 Host: 0.0.0.0
+   ✅ Server started successfully!
+   🔗 MCP Endpoint: http://0.0.0.0:12306/mcp
+   💓 Health Check: http://0.0.0.0:12306/ping
+   ```
+
+4. **Configure Extension Connection**
+   - Click the extension icon in the browser toolbar
+   - Select "HTTP Connection" mode
+   - Enter server address: `http://127.0.0.1:12306`
+   - Click "Connect"
+   - After successful connection, status will show "✅ Connected"
+
+5. **Configure MCP Client**
+
+   Add the following configuration to your MCP client (such as CherryStudio, Dify, etc.):
+
+   ```json
+   {
+     "mcpServers": {
+       "chrome-mcp-server": {
+         "type": "streamableHttp",
+         "url": "http://127.0.0.1:12306/mcp"
+       }
+     }
+   }
+   ```
+
+   <img width="475" alt="Screenshot 2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
+
+#### Using PM2 to Manage Server (Optional, Recommended for Production)
+
+If you want the server to run in the background, you can use PM2:
 
 ```bash
-npm install -g mcp-chrome-bridge
+# Install PM2 (if not installed)
+npm install -g pm2
+
+# Start server
+cd native-server-deploy
+pm2 start start-server-only.js --name mcp-chrome -- 12306
+
+# Check status
+pm2 status
+
+# View logs
+pm2 logs mcp-chrome
+
+# Set auto-start on boot
+pm2 save
+pm2 startup
 ```
 
-pnpm
+#### Alternative Method: Using npm Global Install (Traditional Method)
+
+If you prefer using npm global installation:
 
 ```bash
-# Method 1: Enable scripts globally (recommended)
+# Using npm
+npm install -g mcp-chrome-bridge
+
+# Using pnpm
 pnpm config set enable-pre-post-scripts true
 pnpm install -g mcp-chrome-bridge
 
-# Method 2: Manual registration (if postinstall doesn't run)
-pnpm install -g mcp-chrome-bridge
+# If automatic registration fails, register manually
 mcp-chrome-bridge register
 ```
 
 > Note: pnpm v7+ disables postinstall scripts by default for security. The `enable-pre-post-scripts` setting controls whether pre/post install scripts run. If automatic registration fails, use the manual registration command above.
 
-3. **Load Chrome Extension**
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select `your/dowloaded/extension/folder`
-   - Click the extension icon to open the plugin, then click connect to see the MCP configuration
-     <img width="475" alt="Screenshot 2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
+### Method 2: Build from Source (For Developers)
+
+> 💡 **Tip**: If you just want to use this tool, we recommend **Method 1** (pre-built version), which is simpler and faster. Method 2 is suitable for developers who need to modify code, contribute code, or understand the project's internal structure.
+
+#### 1. Clone Repository
+
+```bash
+git clone https://github.com/ZodOpen/mcp-chrome.git
+cd mcp-chrome
+```
+
+#### 2. Install Dependencies
+
+```bash
+pnpm install
+```
+
+#### 3. Build Project
+
+```bash
+# Build all modules
+pnpm build
+
+# Or build step by step
+pnpm build:shared    # Build shared package
+pnpm build:native    # Build native-server
+pnpm build:extension # Build Chrome extension
+```
+
+#### 4. Local Development
+
+**Develop Native Server (Local MCP Server)**
+
+```bash
+# Method 1: Development mode (auto-restart)
+cd app/native-server
+pnpm dev
+
+# Method 2: Manual start (HTTP server only, no Native Messaging dependency)
+node start-server-only.js 12306
+```
+
+**Develop Chrome Extension**
+
+```bash
+cd app/chrome-extension
+pnpm dev
+```
+
+In development mode, the extension will auto-reload. After modifying code, refresh the browser to see changes.
+
+#### 5. Load Development Extension
+
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select directory: `app/chrome-extension/.output/chrome-mv3/`
+
+#### 6. Build for Deployment
+
+**Build Chrome Extension**
+
+```bash
+cd app/chrome-extension
+pnpm build
+```
+
+Build output location: `app/chrome-extension/.output/chrome-mv3/`
+
+**Build Native Server Deployment Package**
+
+```bash
+cd app/native-server
+
+# Ensure build is complete
+pnpm build
+
+# Prepare deployment package
+chmod +x prepare-deploy.sh
+./prepare-deploy.sh
+```
+
+Deployment package location: `app/native-server/native-server-deploy.tar.gz`
+
+For detailed deployment instructions, see: [Build and Deploy Documentation](docs/BUILD_AND_DEPLOY.md)
 
 ### Usage with MCP Protocol Clients
 
@@ -303,3 +472,85 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Architecture Design](docs/ARCHITECTURE.md) - Detailed technical architecture documentation
 - [TOOLS API](docs/TOOLS.md) - Complete tool API documentation
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issue solutions
+- [Build and Deploy](docs/BUILD_AND_DEPLOY.md) - Detailed build and deployment process
+- [Remote Control Architecture](docs/REMOTE_CONTROL_ARCHITECTURE.md) - Remote connection architecture design
+
+## 🧹 Files to Clean Before Uploading to GitHub
+
+Before uploading the project to GitHub, make sure to clean the following files:
+
+### Build Artifacts and Temporary Files
+
+```bash
+# Build artifacts
+app/chrome-extension/.output/
+app/chrome-extension/.wxt/
+app/native-server/dist/
+app/native-server/deploy-package/
+packages/shared/dist/
+packages/wasm-simd/pkg/
+
+# Deployment packages (already in .gitignore, but verify)
+app/native-server.tar.gz
+app/native-server/native-server-deploy.tar.gz
+
+# Node modules (usually already in .gitignore)
+node_modules/
+**/node_modules/
+```
+
+### Log and Cache Files
+
+```bash
+# Log files
+*.log
+logs/
+pnpm-debug.log*
+npm-debug.log*
+
+# Editor files
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.sw?
+
+# Environment variable files
+.env
+.env.local
+.env.*.local
+```
+
+### Other Temporary Files
+
+```bash
+# Statistics files
+stats.html
+stats-*.json
+
+# Other temporary directories
+other/
+tools_optimize.md
+Agents.md
+CLAUDE.md
+```
+
+### Cleanup Commands
+
+You can use the following commands to quickly clean up:
+
+```bash
+# Clean build artifacts
+pnpm clean:dist
+
+# Clean everything (including node_modules, use with caution)
+pnpm clean
+
+# Manually clean deployment packages
+rm -f app/native-server.tar.gz
+rm -f app/native-server/native-server-deploy.tar.gz
+rm -rf app/native-server/deploy-package
+```
+
+> 💡 **Tip**: Most files are already configured in `.gitignore`, and Git will automatically ignore them. However, it's recommended to verify that no temporary files are missed before uploading.

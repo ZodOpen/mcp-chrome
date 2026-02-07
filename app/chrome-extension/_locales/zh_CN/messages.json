@@ -1,6 +1,6 @@
 {
   "extensionName": {
-    "message": "chrome-mcp-server",
+    "message": "chrome-mcp",
     "description": "扩展名称"
   },
   "extensionDescription": {
@@ -8,7 +8,7 @@
     "description": "扩展描述"
   },
   "nativeServerConfigLabel": {
-    "message": "Native Server 配置",
+    "message": "服务连接配置",
     "description": "本地服务器设置的主要节标题"
   },
   "semanticEngineLabel": {

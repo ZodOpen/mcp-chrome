@@ -7,6 +7,7 @@ import {
 import nativeMessagingHostInstance from '../native-messaging-host';
 import { NativeMessageType, TOOL_SCHEMAS } from 'chrome-mcp-shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { callRemoteBrowserTool, hasRemoteBrowser } from './remote-browser-tools';
 
 async function listDynamicFlowTools(): Promise<Tool[]> {
   try {
@@ -81,6 +82,17 @@ export const setupTools = (server: Server) => {
 
 const handleToolCall = async (name: string, args: any): Promise<CallToolResult> => {
   try {
+    // Try remote browser first (if available)
+    if (hasRemoteBrowser()) {
+      console.log(`[MCP] Using remote browser for tool call: ${name}`);
+      const remoteResult = await callRemoteBrowserTool(name, args);
+      if (remoteResult) {
+        return remoteResult;
+      }
+      // If remote call failed, fall through to local Native Messaging
+      console.log(`[MCP] Remote browser call failed, falling back to local`);
+    }
+
     // If calling a dynamic flow tool (name starts with flow.), proxy to common flow-run tool
     if (name && name.startsWith('flow.')) {
       // We need to resolve flow by slug to ID

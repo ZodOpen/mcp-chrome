@@ -437,8 +437,24 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
       }
     });
 
-    nativePort.onDisconnect.addListener(() => {
-      console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, chrome.runtime.lastError);
+    nativePort.onDisconnect.addListener(async () => {
+      // Check if native mode is still enabled before logging errors
+      const result = await chrome.storage.local
+        .get(['connectionMode'])
+        .catch(() => ({ connectionMode: 'native' }));
+      const isNativeMode = !result.connectionMode || result.connectionMode === 'native';
+
+      // Only log warning if we're in native mode and it's not a "forbidden" error
+      if (isNativeMode) {
+        const error = chrome.runtime.lastError;
+        // Don't spam logs for "forbidden" errors (means native host not registered)
+        if (error && !error.message?.includes('forbidden')) {
+          console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, error);
+        } else if (!error) {
+          console.log('[Native] Connection closed');
+        }
+      }
+
       nativePort = null;
 
       // Mark server as stopped since native host disconnection means server is down
@@ -450,7 +466,11 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         return;
       }
       if (!autoConnectEnabled) return;
-      scheduleReconnect('native_port_disconnected');
+
+      // Only schedule reconnect if in native mode
+      if (isNativeMode) {
+        scheduleReconnect('native_port_disconnected');
+      }
     });
 
     nativePort.postMessage({ type: NativeMessageType.START, payload: { port } });
@@ -477,17 +497,41 @@ export const initNativeHostListener = () => {
       console.error(ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED, error);
     });
 
+  // Helper function to check if native mode is enabled
+  const shouldAutoConnectNative = async (): Promise<boolean> => {
+    try {
+      const result = await chrome.storage.local.get(['connectionMode']);
+      // Only auto-connect if connectionMode is explicitly 'native' or not set (default)
+      return !result.connectionMode || result.connectionMode === 'native';
+    } catch (error) {
+      console.error('[Native] Failed to check connection mode:', error);
+      return false;
+    }
+  };
+
   // Auto-connect on SW activation (covers SW restart after idle termination)
-  void ensureNativeConnected('sw_startup').catch(() => {});
+  shouldAutoConnectNative().then((shouldConnect) => {
+    if (shouldConnect) {
+      void ensureNativeConnected('sw_startup').catch(() => {});
+    }
+  });
 
   // Auto-connect on Chrome browser startup
   chrome.runtime.onStartup.addListener(() => {
-    void ensureNativeConnected('onStartup').catch(() => {});
+    shouldAutoConnectNative().then((shouldConnect) => {
+      if (shouldConnect) {
+        void ensureNativeConnected('onStartup').catch(() => {});
+      }
+    });
   });
 
   // Auto-connect on extension install/update
   chrome.runtime.onInstalled.addListener(() => {
-    void ensureNativeConnected('onInstalled').catch(() => {});
+    shouldAutoConnectNative().then((shouldConnect) => {
+      if (shouldConnect) {
+        void ensureNativeConnected('onInstalled').catch(() => {});
+      }
+    });
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

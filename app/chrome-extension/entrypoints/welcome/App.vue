@@ -9,6 +9,7 @@ const COMMANDS = {
   pnpmInstall: 'pnpm add -g mcp-chrome-bridge',
   yarnInstall: 'yarn global add mcp-chrome-bridge',
   mcpUrl: 'http://127.0.0.1:' + NATIVE_HOST.DEFAULT_PORT + '/mcp',
+  wsUrl: 'ws://your-server:' + NATIVE_HOST.DEFAULT_PORT + '/browser-ws',
   doctor: 'mcp-chrome-bridge doctor',
   fix: 'mcp-chrome-bridge doctor --fix',
   report: 'mcp-chrome-bridge report --copy',
@@ -29,7 +30,7 @@ const DIAGNOSTICS = [
 ] as const satisfies ReadonlyArray<{ label: string; key: CommandKey }>;
 
 function copyLabel(key: CommandKey): string {
-  return copiedKey.value === key ? 'Copied' : 'Copy';
+  return copiedKey.value === key ? '已复制' : '复制';
 }
 
 function copyColor(key: CommandKey): string {
@@ -85,11 +86,9 @@ async function openDocs(): Promise<void> {
             </div>
             <div class="min-w-0">
               <h1 class="welcome-title text-lg font-medium tracking-tight truncate">
-                Chrome MCP Server
+                chrome-mcp
               </h1>
-              <p class="welcome-muted text-sm truncate">
-                After the extension is installed, this is the only required step.
-              </p>
+              <p class="welcome-muted text-sm truncate"> 安装插件后，完成以下配置即可开始使用 </p>
             </div>
           </div>
 
@@ -97,7 +96,7 @@ async function openDocs(): Promise<void> {
             class="welcome-button px-3 py-2 text-xs font-medium ac-btn flex-shrink-0"
             @click="openDocs"
           >
-            Troubleshooting Docs
+            故障排查文档
           </button>
         </div>
       </header>
@@ -106,10 +105,10 @@ async function openDocs(): Promise<void> {
         <div class="max-w-3xl mx-auto space-y-6">
           <section class="welcome-card welcome-card--primary p-6">
             <h2 class="welcome-title text-xl font-medium">
-              Install <code class="welcome-code">mcp-chrome-bridge</code>
+              方式一：本地模式（安装 <code class="welcome-code">mcp-chrome-bridge</code>）
             </h2>
             <p class="welcome-muted text-sm mt-2">
-              The Chrome extension uses this local bridge to expose MCP tools to your client.
+              适合本地开发使用，Chrome 插件通过本地桥接程序暴露 MCP 工具给您的客户端。
             </p>
 
             <div class="mt-4 space-y-3">
@@ -149,8 +148,9 @@ async function openDocs(): Promise<void> {
               </div>
 
               <div class="welcome-alt-row welcome-muted px-4 py-3 text-xs">
-                Requires Node.js 20+. Check your version with
-                <code class="welcome-code welcome-code-inline px-1 py-0.5">node -v</code>.
+                需要 Node.js 20+。使用
+                <code class="welcome-code welcome-code-inline px-1 py-0.5">node -v</code>
+                检查版本。
               </div>
             </div>
 
@@ -158,9 +158,9 @@ async function openDocs(): Promise<void> {
               class="mt-6 pt-5"
               :style="{ borderTop: 'var(--ac-border-width) solid var(--ac-border)' }"
             >
-              <h3 class="welcome-title text-sm font-medium">MCP client URL (streamable HTTP)</h3>
+              <h3 class="welcome-title text-sm font-medium">MCP 客户端 URL（Streamable HTTP）</h3>
               <p class="welcome-muted text-sm mt-1">
-                Use this URL in your MCP client (e.g., Claude Desktop, CherryStudio).
+                在您的 MCP 客户端（如 Claude Desktop、CherryStudio、Dify）中使用此 URL。
               </p>
 
               <div
@@ -177,9 +177,64 @@ async function openDocs(): Promise<void> {
               </div>
 
               <p class="welcome-subtle text-xs mt-3">
-                Tip: You can also open the extension popup and click "Connect" to copy a full client
-                config snippet.
+                提示：您也可以打开插件弹窗，点击"连接"按钮复制完整的客户端配置代码片段。
               </p>
+            </div>
+          </section>
+
+          <section class="welcome-card p-6">
+            <h2 class="welcome-title text-xl font-medium"> 方式二：远程 HTTP 模式 </h2>
+            <p class="welcome-muted text-sm mt-2">
+              使用 HTTP 协议连接远程 MCP 服务器，适合简单的远程控制场景。
+            </p>
+
+            <div class="mt-4 space-y-4">
+              <div class="welcome-alt-row p-4">
+                <div class="text-sm font-medium mb-2">插件配置</div>
+                <p class="welcome-muted text-xs mb-3">
+                  打开插件弹窗，选择"远程 HTTP 服务器"模式，输入服务器地址：
+                </p>
+                <div class="welcome-command-row flex items-center justify-between gap-3 px-3 py-2">
+                  <code class="welcome-code text-xs break-all">http://your-server:12306</code>
+                  <button
+                    class="welcome-mono px-2 py-1 text-xs font-medium ac-btn flex-shrink-0"
+                    :style="{ color: copyColor('mcpUrl') }"
+                    @click="copyCommand('mcpUrl')"
+                  >
+                    {{ copyLabel('mcpUrl') }}
+                  </button>
+                </div>
+                <p class="welcome-subtle text-[10px] mt-2"> 💡 点击"连接"按钮测试连接 </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="welcome-card p-6">
+            <h2 class="welcome-title text-xl font-medium"> 方式三：远程 WebSocket 模式 </h2>
+            <p class="welcome-muted text-sm mt-2">
+              将 MCP 服务器部署到远程，本地只需浏览器插件，适合团队协作和生产环境。
+            </p>
+
+            <div class="mt-4 space-y-4">
+              <div class="welcome-alt-row p-4">
+                <div class="text-sm font-medium mb-2">插件配置</div>
+                <p class="welcome-muted text-xs mb-3">
+                  打开插件弹窗，选择"远程 WebSocket"模式，输入服务器地址：
+                </p>
+                <div class="welcome-command-row flex items-center justify-between gap-3 px-3 py-2">
+                  <code class="welcome-code text-xs break-all">{{ COMMANDS.wsUrl }}</code>
+                  <button
+                    class="welcome-mono px-2 py-1 text-xs font-medium ac-btn flex-shrink-0"
+                    :style="{ color: copyColor('wsUrl') }"
+                    @click="copyCommand('wsUrl')"
+                  >
+                    {{ copyLabel('wsUrl') }}
+                  </button>
+                </div>
+                <p class="welcome-subtle text-[10px] mt-2">
+                  💡 生产环境建议使用 wss://（SSL 加密）
+                </p>
+              </div>
             </div>
           </section>
 
@@ -188,20 +243,21 @@ async function openDocs(): Promise<void> {
               class="px-6 py-4 cursor-pointer select-none flex items-center justify-between gap-4"
             >
               <div class="min-w-0">
-                <div class="welcome-title text-sm font-medium">Troubleshooting</div>
+                <div class="welcome-title text-sm font-medium">故障排查</div>
                 <div class="welcome-muted text-xs truncate">
-                  Use these only if the bridge fails to register or connect.
+                  仅当桥接程序无法注册或连接时使用这些工具
                 </div>
               </div>
-              <span class="welcome-mono welcome-subtle text-xs flex-shrink-0">doctor · report</span>
+              <span class="welcome-mono welcome-subtle text-xs flex-shrink-0">诊断 · 报告</span>
             </summary>
 
             <div class="px-6 pb-6 space-y-4">
               <div class="welcome-alt-row p-4">
-                <div class="text-sm font-medium">Diagnostics</div>
+                <div class="text-sm font-medium">诊断工具</div>
                 <p class="welcome-muted text-sm mt-1">
-                  Run <code class="welcome-code">doctor</code> to check installation status. If it
-                  reports an error, run the auto-fix command.
+                  运行
+                  <code class="welcome-code">doctor</code>
+                  检查安装状态。如果报告错误，运行自动修复命令。
                 </p>
 
                 <div class="mt-3 space-y-2">
@@ -214,7 +270,13 @@ async function openDocs(): Promise<void> {
                       <div
                         class="welcome-mono welcome-subtle text-[10px] uppercase tracking-widest font-medium"
                       >
-                        {{ item.label }}
+                        {{
+                          item.label === 'Doctor'
+                            ? '诊断'
+                            : item.label === 'Auto-fix'
+                              ? '自动修复'
+                              : item.label
+                        }}
                       </div>
                       <code class="welcome-code text-xs break-all">{{ COMMANDS[item.key] }}</code>
                     </div>
@@ -227,42 +289,6 @@ async function openDocs(): Promise<void> {
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div class="welcome-report-card p-4">
-                <div class="text-sm font-medium" :style="{ color: 'var(--ac-danger)' }">
-                  Report an issue
-                </div>
-                <p class="welcome-muted text-sm mt-1">
-                  Generate a diagnostic report and paste it into a GitHub issue.
-                </p>
-
-                <div
-                  class="welcome-command-row mt-3 flex items-center justify-between gap-3 px-3 py-2"
-                >
-                  <code class="welcome-code text-xs break-all">{{ COMMANDS.report }}</code>
-                  <button
-                    class="welcome-mono px-2 py-1 text-xs font-medium ac-btn flex-shrink-0"
-                    :style="{ color: copyColor('report') }"
-                    @click="copyCommand('report')"
-                  >
-                    {{ copyLabel('report') }}
-                  </button>
-                </div>
-
-                <p class="welcome-subtle text-xs mt-2">
-                  This copies the report to your clipboard (sensitive info is automatically
-                  redacted).
-                </p>
-              </div>
-
-              <div class="flex">
-                <button
-                  class="welcome-button px-3 py-2 text-xs font-medium ac-btn"
-                  @click="openDocs"
-                >
-                  Open troubleshooting docs
-                </button>
               </div>
             </div>
           </details>
